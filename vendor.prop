@@ -162,6 +162,7 @@ debug.sf.enable_adpf_cpu_hint=true
 
 # Keyguard
 keyguard.no_require_sim=true
+debug.sf.enable_gl_backpressure=0
 
 # Keystore
 ro.hardware.keystore_desede=true
