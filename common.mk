@@ -109,6 +109,10 @@ PRODUCT_COPY_FILES += \
 #CertifiedProps
 $(call inherit-product-if-exists, vendor/certprops/Android.mk)
 
+# Core Packages
+PRODUCT_PACKAGES += \
+    Parts
+
 # Display
 PRODUCT_PACKAGES += \
     disable_configstore \
