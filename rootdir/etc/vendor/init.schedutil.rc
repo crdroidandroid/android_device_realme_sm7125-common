@@ -1,0 +1,8 @@
+service set_schedutil /vendor/bin/sh -c 'for p in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor; do echo schedutil > "$p"; done'
+    class late_start
+    user root
+    group root
+    oneshot
+
+on property:sys.boot_completed=1
+    start set_schedutil

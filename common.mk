@@ -230,7 +230,8 @@ PRODUCT_PACKAGES += \
     init.target.rc \
     init.qcom.factory.rc \
     init.qcom.usb.rc \
-    init.sm7125.rc
+    init.sm7125.rc \
+    init.schedutil.rc
 
 # Recovery init script
 PRODUCT_PACKAGES += \
