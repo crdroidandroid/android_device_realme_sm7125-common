@@ -74,36 +74,59 @@ dynamic_cpu_scaling() {
     done &
 }
 
-# -------------------------
-# ZRAM - Fixed 3GB Configuration
-# -------------------------
+# Zram Configuration 
 configure_zram() {
-    # Always enable 3GB ZRAM
-    ZRamSizeBytes=$((3072 * 1024 * 1024))  # 3GB fixed
+    # Safely disable existing zram
+    swapoff /dev/block/zram0 2>/dev/null || true
     
-    # Stop existing swap
-    swapoff /dev/block/zram0 2>/dev/null
+    # Reset zram device
+    [ -w /sys/block/zram0/reset ] && echo 1 > /sys/block/zram0/reset
     
-    # Reset ZRAM device
-    echo 1 > /sys/block/zram0/reset 2>/dev/null
+    # Set compression algorithm (LZ4 optimized for ARM Cortex-A76/A55)
+    echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || return 1
     
-    # Set best compression algorithm
-    echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || \
-    echo lzo > /sys/block/zram0/comp_algorithm 2>/dev/null || \
-    echo lzo-rle > /sys/block/zram0/comp_algorithm 2>/dev/null
+    # Optimize compression streams for 8-core big.LITTLE (2x A76 + 6x A55)
+    echo 4 > /sys/block/zram0/max_comp_streams 2>/dev/null || true
     
-    # Configure ZRAM
-    echo $ZRamSizeBytes > /sys/block/zram0/disksize
-    mkswap /dev/block/zram0 >/dev/null 2>&1
-    swapon /dev/block/zram0 -p 32758 2>/dev/null
-
-    # Optimize compression streams
-    echo 8 > /sys/block/zram0/max_comp_streams 2>/dev/null
+    # Set 4GB zram size
+    echo 4294967296 > /sys/block/zram0/disksize 2>/dev/null || return 1
     
-    # Balanced swappiness for multitasking
-    echo 100 > /proc/sys/vm/swappiness 2>/dev/null
-    echo 60 > /proc/sys/vm/vfs_cache_pressure 2>/dev/null
-    echo 0 > /proc/sys/vm/page-cluster 2>/dev/null
+    # Initialize and enable swap
+    mkswap /dev/block/zram0 2>/dev/null || return 1
+    swapon /dev/block/zram0 -p 32758 2>/dev/null || return 1
+    
+    # VM tuning - Optimized for Realme 6 Pro mobile workloads
+    {
+        # Swappiness: Slightly higher for 4GB zram to utilize it effectively
+        echo 90 > /proc/sys/vm/swappiness
+        
+        # Cache pressure: Aggressive reclaim for mobile RAM management
+        echo 100 > /proc/sys/vm/vfs_cache_pressure
+        
+        # Page-cluster: Small reads optimal for mobile flash + zram combo
+        echo 1 > /proc/sys/vm/page-cluster
+        
+        # Dirty ratios: Conservative for mobile storage longevity
+        echo 20 > /proc/sys/vm/dirty_ratio
+        echo 5 > /proc/sys/vm/dirty_background_ratio
+        
+        # Extra free memory: Buffer for smooth operation
+        echo 1024 > /proc/sys/vm/extra_free_kbytes
+        
+        # Memory overcommit: Conservative for stability
+        echo 1 > /proc/sys/vm/overcommit_memory
+        echo 50 > /proc/sys/vm/overcommit_ratio
+        
+        # Additional mobile optimizations for Snapdragon 720G
+        echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
+        echo 0 > /proc/sys/vm/oom_kill_allocating_task 2>/dev/null || true
+        
+        # Optimize readahead for mobile storage patterns
+        echo 128 > /sys/block/*/queue/read_ahead_kb 2>/dev/null || true
+        
+    } 2>/dev/null
+    
+    return 0
 }
 
 # -------------------------
@@ -192,12 +215,8 @@ configure_multitasking() {
     fi
     
     # Stock-like VM tunables with minor improvements
-    echo 20 > /proc/sys/vm/dirty_ratio 2>/dev/null
-    echo 5 > /proc/sys/vm/dirty_background_ratio 2>/dev/null
     echo 3000 > /proc/sys/vm/dirty_expire_centisecs 2>/dev/null
     echo 500 > /proc/sys/vm/dirty_writeback_centisecs 2>/dev/null
-    echo 0 > /proc/sys/vm/overcommit_memory 2>/dev/null
-    echo 50 > /proc/sys/vm/overcommit_ratio 2>/dev/null
     
     # Keep stock memory behavior mostly intact
     echo 1 > /proc/sys/vm/compact_unevictable_allowed 2>/dev/null
@@ -305,12 +324,10 @@ configure_system() {
 # Execute all optimizations
 configure_cpu_governor
 configure_gpu
-configure_zram
 configure_multitasking
 configure_scheduler
 configure_network
 configure_thermal
 configure_system
-
-# Start intelligent CPU scaling
 dynamic_cpu_scaling
+configure_zram
